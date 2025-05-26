@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Data Entry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif; /* A common modern font */
+        }
+        /* Custom styles for star rating */
+        .star-rating {
+            display: flex;
+            flex-direction: row-reverse; /* Reverse order for CSS styling */
+            justify-content: flex-end; /* Align stars to the left for standard look */
+        }
+        .star-rating input[type="radio"] {
+            display: none; /* Hide the actual radio buttons */
+        }
+        .star-rating label {
+            cursor: pointer;
+            font-size: 2.5rem; /* Larger stars */
+            color: #cbd5e0; /* Gray color for unselected stars */
+            transition: color 0.2s ease-in-out;
+            padding: 0 0.1rem; /* Small padding between stars */
+        }
+        .star-rating label:hover,
+        .star-rating label:hover ~ label {
+            color: #FBBF24; /* Yellow on hover */
+        }
+        .star-rating input[type="radio"]:checked ~ label {
+            color: #FBBF24; /* Yellow for checked and preceding stars */
+        }
+        /* Style for drag and drop placeholder items */
+        .draggable-item {
+            @apply px-3 py-1 rounded-full cursor-grab text-sm select-none; /* Base styles */
+            display: inline-block; /* Allows items to sit side-by-side */
+            margin: 0.25rem;
+        }
+        /* Modal Overlay */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        /* Modal Content */
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            position: relative;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex min-h-screen">
+
+    <aside class="w-64 bg-gray-800 text-white p-6 flex flex-col shadow-lg">
+        <div class="text-2xl font-bold mb-8 text-blue-400">Dashboard</div>
+        <nav class="space-y-4">
+            <a href="#" class="block bg-gray-700 text-white px-3 py-2 rounded-md transition duration-200" id="homeLink" onclick="showSection('homeSection'); renderDashboard();">Home</a>
+            <a href="#" class="block text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-2 rounded-md transition duration-200" id="analyticsLink" onclick="showSection('analyticsSection'); renderAnalyticsDashboard();">Analytics</a>
+            <a href="#" class="block text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-2 rounded-md transition duration-200" id="dataEntryLink" onclick="showSection('dataEntrySection'); populateDataEntryFields();">Data Entry</a>
+            <a href="#" class="block text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-2 rounded-md transition duration-200" id="reportsLink" onclick="showSection('reportsSection'); renderReportsTable();">Reports</a>
+            <a href="#" class="block text-gray-300 hover:text-white hover:bg-gray-700 px-3 py-2 rounded-md transition duration-200" id="adminLink" onclick="showSection('adminSection'); renderAdminDashboard();">Admin</a>
+        </nav>
+    </aside>
+
+    <div class="flex-1 p-8 flex justify-center">
+        <div class="w-full max-w-[1280px] max-h-[720px] overflow-y-auto">
+            <div id="homeSection">
+                <header class="bg-gray-900 text-white p-6 rounded-lg shadow-md mb-8">
+                    <h1 class="text-3xl font-extrabold text-blue-300">Professional Activism Dashboard</h1>
+                    <p class="text-gray-400 mt-2">A comprehensive overview of your activism data.</p>
+                </header>
+
+                <div class="bg-gray-800 p-6 rounded-lg shadow-xl text-white">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-gray-700 p-5 rounded-lg shadow-md flex flex-col items-start">
+                            <h3 class="text-lg font-semibold text-blue-300 mb-2">Total Entries</h3>
+                            <p id="totalEntriesCount" class="text-5xl font-bold text-green-400">0</p>
+                        </div>
+                        <div class="bg-gray-700 p-5 rounded-lg shadow-md flex flex-col items-start">
+                            <h3 class="text-lg font-semibold text-blue-300 mb-2">Avg. Priority Rating</h3>
+                            <p id="avgPriorityRating" class="text-5xl font-bold text-yellow-400">0.0</p>
+                        </div>
+                        <div class="bg-gray-700 p-5 rounded-lg shadow-md flex flex-col items-start">
+                            <h3 class="text-lg font-semibold text-blue-300 mb-2">Total Feedback</h3>
+                            <p id="totalFeedbackCount" class="text-5xl font-bold text-purple-400">0</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-gray-700 p-6 rounded-lg shadow-md">
+                            <h3 class="text-lg font-semibold text-blue-300 mb-4">Entries by Activist</h3>
+                            <div id="activistChartContainer" class="w-full h-80 flex items-center justify-center">
+                                <svg id="activistBarChart" class="w-full h-full"></svg>
+                                <p class="text-gray-400 hidden" id="noActivistData">No activist data available.</p>
+                            </div>
+                        </div>
+                        <div class="bg-gray-700 p-6 rounded-lg shadow-md">
+                            <h3 class="text-lg font-semibold text-blue-300 mb-4">Entries by Platform</h3>
+                            <div id="platformChartContainer" class="w-full h-80 flex items-center justify-center">
+                                <svg id="platformBarChart" class="w-full h-full"></svg>
+                                <p class="text-gray-400 hidden" id="noPlatformData">No platform data available.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-gray-700 p-6 rounded-lg shadow-md">
+                            <h3 class="text-lg font-semibold text-blue-300 mb-4">Entries Over Time (Last 30 Days)</h3>
+                            <div id="timeChartContainer" class="w-full h-80 flex items-center justify-center">
+                                <svg id="timeLineChart" class="w-full h-full"></svg>
+                                <p class="text-gray-400 hidden" id="noTimeData">No time-series data available.</p>
+                            </div>
+                        </div>
+                        <div class="bg-gray-700 p-6 rounded-lg shadow-md flex flex-col items-center justify-center">
+                            <h3 class="text-lg font-semibold text-blue-300 mb-4">Overall Feedback Distribution</h3>
+                            <div id="overallFeedbackChartContainer" class="w-full h-80 flex items-center justify-center">
+                                <svg id="overallFeedbackPieChart" class="w-full h-full"></svg>
+                                <p class="text-gray-400 hidden" id="noOverallFeedbackData">No overall feedback data available.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="analyticsSection" class="hidden flex flex-col gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white p-6 rounded-lg shadow-md flex flex-col items-center justify-center">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4" id="pieChartTitle">Select an entry to view feedback analytics</h3>
+                        <div id="pieChartContainer" class="w-full h-80 flex items-center justify-center">
+                            <p class="text-gray-500" id="pieChartPlaceholder">Click an entry from the list below to see its feedback pie chart.</p>
+                            <svg id="feedbackPieChart" class="hidden"></svg>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Most Recent 5-Star Entries</h3>
+                        <ul id="fiveStarEntryList" class="space-y-2">
+                            <li class="text-gray-500">No 5-star entries yet.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">All Entries</h3>
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unique ID</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Posted Time</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activist Name</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Context</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                            </tr>
+                        </thead>
+                        <tbody id="analyticsAllEntriesTableBody" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                    </table>
+                    <p id="noAnalyticsDataMessage" class="text-center text-gray-500 mt-4 hidden">No data entries yet.</p>
+                </div>
+            </div>
+
+            <div id="dataEntrySection" class="hidden">
+                <header class="bg-white p-6 rounded-lg shadow-md mb-8">
+                    <h1 class="text-3xl font-extrabold text-gray-900">Monitoring Data Entry Form</h1>
+                    <p class="text-gray-600 mt-2">Fill in the details below to log new activism data.</p>
+                </header>
+
+                <form id="dataEntryForm" class="bg-white p-8 rounded-lg shadow-md grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                    <div class="md:col-span-2 bg-gray-50 p-4 rounded-lg shadow-sm mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Context Snippets (Drag & Drop Source)</h3>
+                        <div class="flex flex-wrap items-center gap-2" id="draggable-snippets">
+                            </div>
+                        <p class="text-sm text-gray-500 mt-3">
+                            *Note: Drag snippets from above into the 'Context' text area.
+                        </p>
+                    </div>
+
+                    <div>
+                        <label for="postedTime" class="block text-sm font-medium text-gray-700 mb-1">Posted Time</label>
+                        <input
+                            type="datetime-local"
+                            id="postedTime"
+                            name="postedTime"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50"
+                            required
+                        >
+                    </div>
+
+                    <div>
+                        <label for="activistName" class="block text-sm font-medium text-gray-700 mb-1">Activist Name</label>
+                        <select
+                            id="activistName"
+                            name="activistName"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50"
+                            required
+                        >
+                            <option value="">Select Activist</option>
+                            </select>
+                    </div>
+
+                    <div>
+                        <label for="platform" class="block text-sm font-medium text-gray-700 mb-1">Platform</label>
+                        <select
+                            id="platform"
+                            name="platform"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50"
+                            required
+                        >
+                            <option value="">Select Platform</option>
+                            <option value="Facebook">Facebook</option>
+                            <option value="Youtube">Youtube</option>
+                            <option value="Twitter">Twitter</option>
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-2"> <label for="context" class="block text-sm font-medium text-gray-700 mb-1">Context</label>
+                        <textarea
+                            id="context"
+                            name="context"
+                            rows="4"
+                            placeholder="Describe the context of the activism (e.g., 'Protest against new tax policy', 'Discussion on climate change impacts'). You can drag and drop snippets from above."
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50"
+                            required
+                        ></textarea>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label for="analytics" class="block text-sm font-medium text-gray-700 mb-1">Analytics</label>
+                        <textarea
+                            id="analytics"
+                            name="analytics"
+                            rows="3"
+                            placeholder="Enter any relevant analytics or observations here (e.g., 'Reached 10K views, 20% engagement rate')."
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50"
+                        ></textarea>
+                    </div>
+
+                    <div>
+                        <label for="positiveFeedback" class="block text-sm font-medium text-gray-700 mb-1">Positive Feedback</label>
+                        <input
+                            type="number"
+                            id="positiveFeedback"
+                            name="positiveFeedback"
+                            min="0"
+                            placeholder="0"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50"
+                            value="0"
+                            required
+                        >
+                    </div>
+
+                    <div>
+                        <label for="negativeFeedback" class="block text-sm font-medium text-gray-700 mb-1">Negative Feedback</label>
+                        <input
+                            type="number"
+                            id="negativeFeedback"
+                            name="negativeFeedback"
+                            min="0"
+                            placeholder="0"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50"
+                            value="0"
+                            required
+                        >
+                    </div>
+
+                    <div>
+                        <label for="neutralFeedback" class="block text-sm font-medium text-gray-700 mb-1">Neutral Feedback</label>
+                        <input
+                            type="number"
+                            id="neutralFeedback"
+                            name="neutralFeedback"
+                            min="0"
+                            placeholder="0"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50"
+                            value="0"
+                            required
+                        >
+                    </div>
+
+                    <div>
+                        <label for="link" class="block text-sm font-medium text-gray-700 mb-1">Link (URL)</label>
+                        <input
+                            type="url"
+                            id="link"
+                            name="link"
+                            placeholder="https://example.com/post-link"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50"
+                            required
+                        >
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Priority Rating (1-5 Stars)</label>
+                        <div class="star-rating">
+                            <input type="radio" id="star5" name="priority" value="5" required /><label for="star5" title="5 stars">★</label>
+                            <input type="radio" id="star4" name="priority" value="4" /><label for="star4" title="4 stars">★</label>
+                            <input type="radio" id="star3" name="priority" value="3" /><label for="star3" title="3 stars">★</label>
+                            <input type="radio" id="star2" name="priority" value="2" /><label for="star2" title="2 stars">★</label>
+                            <input type="radio" id="star1" name="priority" value="1" /><label for="star1" title="1 star">★</label>
+                        </div>
+                    </div>
+
+                    <div class="md:col-span-2 pt-4">
+                        <button
+                            type="submit"
+                            class="w-full flex justify-center py-3 px-6 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-200"
+                        >
+                            Submit Data
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="reportsSection" class="hidden">
+                <header class="bg-white p-6 rounded-lg shadow-md mb-8">
+                    <h1 class="text-3xl font-extrabold text-gray-900">Data Reports</h1>
+                    <p class="text-gray-600 mt-2">View all submitted activism data below.</p>
+                    <button
+                        id="clearDataButton"
+                        class="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition duration-200"
+                    >
+                        Clear All Data
+                    </button>
+                </header>
+
+                <div class="bg-white p-8 rounded-lg shadow-md overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unique ID</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Posted Time</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activist Name</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Context</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Analytics</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Positive</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Negative</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Neutral</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Link</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportsTableBody" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                    </table>
+                    <p id="noDataMessage" class="text-center text-gray-500 mt-4 hidden">No data entries yet.</p>
+                </div>
+            </div>
+
+            <div id="adminSection" class="hidden">
+                <header class="bg-white p-6 rounded-lg shadow-md mb-8">
+                    <h1 class="text-3xl font-extrabold text-gray-900">Admin Settings</h1>
+                    <p class="text-gray-600 mt-2">Manage dynamic data for the dashboard.</p>
+                </header>
+
+                <div class="bg-white p-8 rounded-lg shadow-md space-y-8">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Manage Activist Names</h2>
+                        <div class="flex space-x-2 mb-4">
+                            <input type="text" id="newActivistName" placeholder="Add new activist name" class="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50">
+                            <button onclick="addActivist()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-200">Add Activist</button>
+                        </div>
+                        <ul id="activistList" class="space-y-2">
+                            </ul>
+                    </div>
+
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Manage Context Snippets</h2>
+                        <div class="flex space-x-2 mb-4">
+                            <input type="text" id="newSnippetText" placeholder="Add new snippet text" class="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50">
+                            <button onclick="addSnippet()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-200">Add Snippet</button>
+                        </div>
+                        <div id="snippetList" class="flex flex-wrap items-center gap-2">
+                            </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="entryDetailModal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <button class="absolute top-4 right-4 text-gray-500 hover:text-gray-800 text-2xl font-bold" onclick="closeModal()">×</button>
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Entry Details</h2>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <tbody id="modalDataTableBody" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    <script>
+        // --- Section Management ---
+        const sections = ['dataEntrySection', 'reportsSection', 'homeSection', 'analyticsSection', 'adminSection'];
+        const dataEntryLink = document.getElementById('dataEntryLink');
+        const reportsLink = document.getElementById('reportsLink');
+        const homeLink = document.getElementById('homeLink');
+        const analyticsLink = document.getElementById('analyticsLink');
+        const adminLink = document.getElementById('adminLink');
+
+        function showSection(sectionId) {
+            sections.forEach(id => {
+                const section = document.getElementById(id);
+                if (section) {
+                    section.classList.add('hidden');
+                }
+            });
+            const targetSection = document.getElementById(sectionId);
+            if (targetSection) {
+                targetSection.classList.remove('hidden');
+            }
+
+            // Update active link styling
+            document.querySelectorAll('aside nav a').forEach(link => {
+                link.classList.remove('bg-gray-700', 'text-white');
+                link.classList.add('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
+            });
+            if (sectionId === 'dataEntrySection') {
+                dataEntryLink.classList.add('bg-gray-700', 'text-white');
+                dataEntryLink.classList.remove('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
+            } else if (sectionId === 'reportsSection') {
+                reportsLink.classList.add('bg-gray-700', 'text-white');
+                reportsLink.classList.remove('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
+            } else if (sectionId === 'homeSection') {
+                homeLink.classList.add('bg-gray-700', 'text-white');
+                homeLink.classList.remove('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
+            } else if (sectionId === 'analyticsSection') {
+                analyticsLink.classList.add('bg-gray-700', 'text-white');
+                analyticsLink.classList.remove('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
+            } else if (sectionId === 'adminSection') {
+                adminLink.classList.add('bg-gray-700', 'text-white');
+                adminLink.classList.remove('text-gray-300', 'hover:text-white', 'hover:bg-gray-700');
+            }
+        }
+
+        // --- Form Submission and Local Storage ---
+        const dataEntryForm = document.getElementById('dataEntryForm');
+        const reportsTableBody = document.getElementById('reportsTableBody');
+        const noDataMessage = document.getElementById('noDataMessage');
+        const clearDataButton = document.getElementById('clearDataButton');
+        const CONTEXT_STORAGE_KEY = 'activismData';
+        const GLOBAL_COUNTER_KEY = 'globalEntryCounter'; // Key for the global unique ID counter
+        const ACTIVIST_NAMES_KEY = 'activistNamesList'; // Key for dynamic activist names
+        const CONTEXT_SNIPPETS_KEY = 'contextSnippetsList'; // Key for dynamic context snippets
+
+        // Modal elements
+        const entryDetailModal = document.getElementById('entryDetailModal');
+        const modalDataTableBody = document.getElementById('modalDataTableBody');
+
+        // Function to load data from local storage
+        function loadData(key = CONTEXT_STORAGE_KEY) {
+            try {
+                const data = localStorage.getItem(key);
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                console.error(`Error loading data from local storage for key ${key}:`, e);
+                return [];
+            }
+        }
+
+        // Function to save data to local storage
+        function saveData(data, key = CONTEXT_STORAGE_KEY) {
+            try {
+                localStorage.setItem(key, JSON.stringify(data));
+            } catch (e) {
+                console.error(`Error saving data to local storage for key ${key}:`, e);
+            }
+        }
+
+        // Function to get and increment global entry counter
+        function getNextGlobalEntryCounter() {
+            let counter = parseInt(localStorage.getItem(GLOBAL_COUNTER_KEY) || '0');
+            counter++;
+            localStorage.setItem(GLOBAL_COUNTER_KEY, counter.toString());
+            return counter;
+        }
+
+        // Function to render the reports table
+        function renderReportsTable() {
+            const allEntries = loadData();
+            reportsTableBody.innerHTML = ''; // Clear existing rows
+
+            if (allEntries.length === 0) {
+                noDataMessage.classList.remove('hidden');
+                return;
+            } else {
+                noDataMessage.classList.add('hidden');
+            }
+
+            allEntries.forEach(entry => {
+                const row = reportsTableBody.insertRow();
+                row.classList.add('hover:bg-gray-50', 'cursor-pointer'); // Add hover effect and cursor pointer
+                row.onclick = () => openModal(entry); // Attach click event to open modal
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${entry.uniqueId || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${entry.postedTime ? new Date(entry.postedTime).toLocaleString() : 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${entry.activistName || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${entry.platform || 'N/A'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title="${entry.context || ''}">${entry.context || 'N/A'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title="${entry.analytics || ''}">${entry.analytics || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${entry.positiveFeedback || '0'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${entry.negativeFeedback || '0'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${entry.neutralFeedback || '0'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600 hover:underline"><a href="${entry.link}" target="_blank" rel="noopener noreferrer">${entry.link ? 'Link' : 'N/A'}</a></td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${entry.priority || 'N/A'}</td>
+                `;
+            });
+        }
+
+        // Function to open the modal with entry details
+        function openModal(entry) {
+            modalDataTableBody.innerHTML = ''; // Clear previous details
+
+            const details = [
+                { label: 'Unique ID', value: entry.uniqueId || 'N/A' },
+                { label: 'Posted Time', value: entry.postedTime ? new Date(entry.postedTime).toLocaleString() : 'N/A' },
+                { label: 'Activist Name', value: entry.activistName || 'N/A' },
+                { label: 'Platform', value: entry.platform || 'N/A' },
+                { label: 'Context', value: entry.context || 'N/A' },
+                { label: 'Analytics', value: entry.analytics || 'N/A' },
+                { label: 'Positive Feedback', value: entry.positiveFeedback || '0' },
+                { label: 'Negative Feedback', value: entry.negativeFeedback || '0' },
+                { label: 'Neutral Feedback', value: entry.neutralFeedback || '0' },
+                { label: 'Link', value: entry.link ? `<a href="${entry.link}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${entry.link}</a>` : 'N/A' },
+                { label: 'Priority Rating', value: entry.priority || 'N/A' }
+            ];
+
+            details.forEach(detail => {
+                const row = modalDataTableBody.insertRow();
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${detail.label}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">${detail.value}</td>
+                `;
+            });
+
+            entryDetailModal.classList.remove('hidden');
+        }
+
+        // Function to close the modal
+        function closeModal() {
+            entryDetailModal.classList.add('hidden');
+        }
+
+        // Event listener for form submission
+        dataEntryForm.addEventListener('submit', (event) => {
+            event.preventDefault(); // Prevent default form submission
+
+            const formData = new FormData(dataEntryForm);
+            const newEntry = {};
+            for (const [key, value] of formData.entries()) {
+                newEntry[key] = value;
+            }
+
+            // Add unique ID
+            newEntry.uniqueId = `ENTRY-${getNextGlobalEntryCounter()}`;
+
+            // Convert feedback fields to numbers
+            newEntry.positiveFeedback = parseInt(newEntry.positiveFeedback) || 0;
+            newEntry.negativeFeedback = parseInt(newEntry.negativeFeedback) || 0;
+            newEntry.neutralFeedback = parseInt(newEntry.neutralFeedback) || 0;
+            newEntry.priority = parseInt(newEntry.priority) || 0;
+
+            const allEntries = loadData();
+            allEntries.push(newEntry);
+            saveData(allEntries); // Save updated data
+
+            dataEntryForm.reset(); // Clear the form
+            // Reset star rating
+            document.querySelectorAll('.star-rating input[type="radio"]').forEach(radio => radio.checked = false);
+            document.getElementById('postedTime').value = ''; // Clear datetime-local explicitly
+
+            // Re-render relevant sections
+            renderReportsTable();
+            renderDashboard();
+            renderAnalyticsDashboard();
+            showSection('reportsSection'); // Optionally show reports after submission
+        });
+
+        // Event listener for clearing all data
+        clearDataButton.addEventListener('click', () => {
+            // Use a custom modal for confirmation instead of alert/confirm
+            showConfirmationModal("Are you sure you want to clear ALL activism data? This action cannot be undone.", () => {
+                localStorage.removeItem(CONTEXT_STORAGE_KEY);
+                localStorage.removeItem(GLOBAL_COUNTER_KEY);
+                renderReportsTable(); // Re-render to show empty table
+                renderDashboard(); // Update dashboard stats
+                renderAnalyticsDashboard(); // Update analytics
+                console.log('All activism data cleared from local storage.');
+            });
+        });
+
+        // --- Admin Section: Manage Activist Names and Context Snippets ---
+
+        // Function to populate activist names dropdown and list
+        function populateActivistNames() {
+            const activistNames = loadData(ACTIVIST_NAMES_KEY);
+            const activistNameSelect = document.getElementById('activistName');
+            const activistListUl = document.getElementById('activistList');
+
+            // Clear existing options and list items
+            activistNameSelect.innerHTML = '<option value="">Select Activist</option>';
+            activistListUl.innerHTML = '';
+
+            if (activistNames.length === 0) {
+                activistListUl.innerHTML = '<li class="text-gray-500">No activists added yet.</li>';
+            }
+
+            activistNames.forEach(name => {
+                // Populate dropdown
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                activistNameSelect.appendChild(option);
+
+                // Populate admin list
+                const li = document.createElement('li');
+                li.className = 'flex justify-between items-center bg-gray-100 p-2 rounded-md';
+                li.innerHTML = `
+                    <span>${name}</span>
+                    <button onclick="removeActivist('${name}')" class="text-red-500 hover:text-red-700 ml-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                `;
+                activistListUl.appendChild(li);
+            });
+        }
+
+        // Function to add a new activist
+        function addActivist() {
+            const newActivistNameInput = document.getElementById('newActivistName');
+            const name = newActivistNameInput.value.trim();
+            if (name) {
+                let activistNames = loadData(ACTIVIST_NAMES_KEY);
+                if (!activistNames.includes(name)) {
+                    activistNames.push(name);
+                    saveData(activistNames, ACTIVIST_NAMES_KEY);
+                    newActivistNameInput.value = '';
+                    populateActivistNames();
+                } else {
+                    showInfoModal("Activist name already exists.");
+                }
+            } else {
+                showInfoModal("Please enter an activist name.");
+            }
+        }
+
+        // Function to remove an activist
+        function removeActivist(nameToRemove) {
+            showConfirmationModal(`Are you sure you want to remove "${nameToRemove}"?`, () => {
+                let activistNames = loadData(ACTIVIST_NAMES_KEY);
+                activistNames = activistNames.filter(name => name !== nameToRemove);
+                saveData(activistNames, ACTIVIST_NAMES_KEY);
+                populateActivistNames();
+            });
+        }
+
+        // Function to populate context snippets and make them draggable
+        function populateContextSnippets() {
+            const contextSnippets = loadData(CONTEXT_SNIPPETS_KEY);
+            const draggableSnippetsContainer = document.getElementById('draggable-snippets');
+            const snippetListDiv = document.getElementById('snippetList');
+
+            draggableSnippetsContainer.innerHTML = ''; // Clear existing snippets
+            snippetListDiv.innerHTML = ''; // Clear existing snippets in admin
+
+            if (contextSnippets.length === 0) {
+                draggableSnippetsContainer.innerHTML = '<p class="text-gray-500">No snippets added yet. Add some in Admin settings!</p>';
+                snippetListDiv.innerHTML = '<p class="text-gray-500">No snippets added yet.</p>';
+            }
+
+            contextSnippets.forEach(snippet => {
+                // Draggable snippets for data entry form
+                const draggableItem = document.createElement('span');
+                draggableItem.className = 'draggable-item bg-blue-100 text-blue-800 border border-blue-200 rounded-full shadow-sm';
+                draggableItem.textContent = snippet;
+                draggableItem.draggable = true;
+                draggableItem.dataset.snippet = snippet; // Store snippet text
+                draggableItem.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', e.target.dataset.snippet);
+                });
+                draggableSnippetsContainer.appendChild(draggableItem);
+
+                // Snippet list for admin section
+                const snippetDiv = document.createElement('div');
+                snippetDiv.className = 'flex justify-between items-center bg-gray-100 p-2 rounded-md w-full';
+                snippetDiv.innerHTML = `
+                    <span class="flex-1 truncate">${snippet}</span>
+                    <button onclick="removeSnippet('${btoa(snippet)}')" class="text-red-500 hover:text-red-700 ml-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                `;
+                snippetListDiv.appendChild(snippetDiv);
+            });
+
+            // Add drag and drop listeners to the context textarea
+            const contextTextarea = document.getElementById('context');
+            contextTextarea.addEventListener('dragover', (e) => {
+                e.preventDefault(); // Allow drop
+            });
+            contextTextarea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const data = e.dataTransfer.getData('text/plain');
+                if (data) {
+                    contextTextarea.value += (contextTextarea.value ? ' ' : '') + data;
+                }
+            });
+        }
+
+        // Function to add a new snippet
+        function addSnippet() {
+            const newSnippetTextInput = document.getElementById('newSnippetText');
+            const snippet = newSnippetTextInput.value.trim();
+            if (snippet) {
+                let contextSnippets = loadData(CONTEXT_SNIPPETS_KEY);
+                if (!contextSnippets.includes(snippet)) {
+                    contextSnippets.push(snippet);
+                    saveData(contextSnippets, CONTEXT_SNIPPETS_KEY);
+                    newSnippetTextInput.value = '';
+                    populateContextSnippets();
+                } else {
+                    showInfoModal("Snippet already exists.");
+                }
+            } else {
+                showInfoModal("Please enter snippet text.");
+            }
+        }
+
+        // Function to remove a snippet (using base64 encoding for safe passing of text)
+        function removeSnippet(encodedSnippetToRemove) {
+            const snippetToRemove = atob(encodedSnippetToRemove); // Decode
+            showConfirmationModal(`Are you sure you want to remove "${snippetToRemove}"?`, () => {
+                let contextSnippets = loadData(CONTEXT_SNIPPETS_KEY);
+                contextSnippets = contextSnippets.filter(s => s !== snippetToRemove);
+                saveData(contextSnippets, CONTEXT_SNIPPETS_KEY);
+                populateContextSnippets();
+            });
+        }
+
+        // Function to populate data entry fields (activist names, context snippets)
+        function populateDataEntryFields() {
+            populateActivistNames();
+            populateContextSnippets();
+            // Set current datetime for postedTime
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const day = now.getDate().toString().padStart(2, '0');
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            document.getElementById('postedTime').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        // --- Dashboard (Home Section) Charts ---
+
+        // Function to render all dashboard charts and stats
+        function renderDashboard() {
+            const allEntries = loadData();
+
+            // Calculate summary statistics
+            const totalEntries = allEntries.length;
+            const totalPriority = allEntries.reduce((sum, entry) => sum + (parseInt(entry.priority) || 0), 0);
+            const avgPriority = totalEntries > 0 ? (totalPriority / totalEntries).toFixed(1) : '0.0';
+            const totalFeedback = allEntries.reduce((sum, entry) =>
+                sum + (parseInt(entry.positiveFeedback) || 0) + (parseInt(entry.negativeFeedback) || 0) + (parseInt(entry.neutralFeedback) || 0), 0);
+
+            document.getElementById('totalEntriesCount').textContent = totalEntries;
+            document.getElementById('avgPriorityRating').textContent = avgPriority;
+            document.getElementById('totalFeedbackCount').textContent = totalFeedback;
+
+            renderActivistBarChart(allEntries);
+            renderPlatformBarChart(allEntries);
+            renderTimeLineChart(allEntries);
+            renderOverallFeedbackPieChart(allEntries);
+        }
+
+        // Render Bar Chart for Entries by Activist
+        function renderActivistBarChart(data) {
+            const chartSvg = d3.select("#activistBarChart");
+            chartSvg.selectAll("*").remove(); // Clear previous chart
+            const noDataMessage = document.getElementById('noActivistData');
+
+            if (data.length === 0) {
+                noDataMessage.classList.remove('hidden');
+                return;
+            } else {
+                noDataMessage.classList.add('hidden');
+            }
+
+            // Aggregate data by activist
+            const activistCounts = d3.rollup(data, v => v.length, d => d.activistName);
+            const chartData = Array.from(activistCounts, ([name, count]) => ({ name, count }))
+                                .sort((a, b) => b.count - a.count); // Sort descending
+
+            const margin = { top: 20, right: 30, bottom: 60, left: 60 };
+            const width = chartSvg.node().getBoundingClientRect().width - margin.left - margin.right;
+            const height = chartSvg.node().getBoundingClientRect().height - margin.top - margin.bottom;
+
+            const svg = chartSvg
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const x = d3.scaleBand()
+                .domain(chartData.map(d => d.name))
+                .range([0, width])
+                .padding(0.1);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(chartData, d => d.count) || 0])
+                .nice()
+                .range([height, 0]);
+
+            svg.append("g")
+                .attr("class", "x-axis")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                .attr("transform", "rotate(-45)")
+                .style("text-anchor", "end")
+                .style("fill", "#cbd5e0"); // Tailwind gray-400
+
+            svg.append("g")
+                .attr("class", "y-axis")
+                .call(d3.axisLeft(y))
+                .selectAll("text")
+                .style("fill", "#cbd5e0"); // Tailwind gray-400
+
+            svg.selectAll(".bar")
+                .data(chartData)
+                .enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", d => x(d.name))
+                .attr("y", d => y(d.count))
+                .attr("width", x.bandwidth())
+                .attr("height", d => height - y(d.count))
+                .attr("fill", "#60A5FA"); // Tailwind blue-400
+        }
+
+        // Render Bar Chart for Entries by Platform
+        function renderPlatformBarChart(data) {
+            const chartSvg = d3.select("#platformBarChart");
+            chartSvg.selectAll("*").remove(); // Clear previous chart
+            const noDataMessage = document.getElementById('noPlatformData');
+
+            if (data.length === 0) {
+                noDataMessage.classList.remove('hidden');
+                return;
+            } else {
+                noDataMessage.classList.add('hidden');
+            }
+
+            // Aggregate data by platform
+            const platformCounts = d3.rollup(data, v => v.length, d => d.platform);
+            const chartData = Array.from(platformCounts, ([name, count]) => ({ name, count }))
+                                .sort((a, b) => b.count - a.count); // Sort descending
+
+            const margin = { top: 20, right: 30, bottom: 60, left: 60 };
+            const width = chartSvg.node().getBoundingClientRect().width - margin.left - margin.right;
+            const height = chartSvg.node().getBoundingClientRect().height - margin.top - margin.bottom;
+
+            const svg = chartSvg
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const x = d3.scaleBand()
+                .domain(chartData.map(d => d.name))
+                .range([0, width])
+                .padding(0.1);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(chartData, d => d.count) || 0])
+                .nice()
+                .range([height, 0]);
+
+            svg.append("g")
+                .attr("class", "x-axis")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                .attr("transform", "rotate(-45)")
+                .style("text-anchor", "end")
+                .style("fill", "#cbd5e0"); // Tailwind gray-400
+
+            svg.append("g")
+                .attr("class", "y-axis")
+                .call(d3.axisLeft(y))
+                .selectAll("text")
+                .style("fill", "#cbd5e0"); // Tailwind gray-400
+
+            svg.selectAll(".bar")
+                .data(chartData)
+                .enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", d => x(d.name))
+                .attr("y", d => y(d.count))
+                .attr("width", x.bandwidth())
+                .attr("height", d => height - y(d.count))
+                .attr("fill", "#FBBF24"); // Tailwind yellow-400
+        }
+
+        // Render Line Chart for Entries Over Time
+        function renderTimeLineChart(data) {
+            const chartSvg = d3.select("#timeLineChart");
+            chartSvg.selectAll("*").remove(); // Clear previous chart
+            const noDataMessage = document.getElementById('noTimeData');
+
+            if (data.length === 0) {
+                noDataMessage.classList.remove('hidden');
+                return;
+            } else {
+                noDataMessage.classList.add('hidden');
+            }
+
+            // Filter data for the last 30 days and aggregate by date
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+            const timeData = data.filter(d => new Date(d.postedTime) >= thirtyDaysAgo)
+                                 .map(d => ({
+                                     date: d3.timeDay.round(new Date(d.postedTime)),
+                                     count: 1
+                                 }));
+
+            const aggregatedData = Array.from(d3.rollup(timeData, v => d3.sum(v, d => d.count), d => d.date),
+                                             ([date, count]) => ({ date, count }))
+                                        .sort((a, b) => a.date - b.date);
+
+            const margin = { top: 20, right: 30, bottom: 60, left: 60 };
+            const width = chartSvg.node().getBoundingClientRect().width - margin.left - margin.right;
+            const height = chartSvg.node().getBoundingClientRect().height - margin.top - margin.bottom;
+
+            const svg = chartSvg
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const x = d3.scaleTime()
+                .domain(d3.extent(aggregatedData, d => d.date))
+                .range([0, width]);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(aggregatedData, d => d.count) || 0])
+                .nice()
+                .range([height, 0]);
+
+            svg.append("g")
+                .attr("class", "x-axis")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x).ticks(d3.timeDay.every(5)).tickFormat(d3.timeFormat("%b %d")))
+                .selectAll("text")
+                .attr("transform", "rotate(-45)")
+                .style("text-anchor", "end")
+                .style("fill", "#cbd5e0");
+
+            svg.append("g")
+                .attr("class", "y-axis")
+                .call(d3.axisLeft(y))
+                .selectAll("text")
+                .style("fill", "#cbd5e0");
+
+            const line = d3.line()
+                .x(d => x(d.date))
+                .y(d => y(d.count));
+
+            svg.append("path")
+                .datum(aggregatedData)
+                .attr("fill", "none")
+                .attr("stroke", "#8B5CF6") // Tailwind purple-400
+                .attr("stroke-width", 2)
+                .attr("d", line);
+
+            svg.selectAll(".dot")
+                .data(aggregatedData)
+                .enter().append("circle")
+                .attr("class", "dot")
+                .attr("cx", d => x(d.date))
+                .attr("cy", d => y(d.count))
+                .attr("r", 4)
+                .attr("fill", "#8B5CF6");
+        }
+
+        // Render Pie Chart for Overall Feedback Distribution
+        function renderOverallFeedbackPieChart(data) {
+            const chartSvg = d3.select("#overallFeedbackPieChart");
+            chartSvg.selectAll("*").remove(); // Clear previous chart
+            const noDataMessage = document.getElementById('noOverallFeedbackData');
+
+            if (data.length === 0) {
+                noDataMessage.classList.remove('hidden');
+                return;
+            } else {
+                noDataMessage.classList.add('hidden');
+            }
+
+            const feedbackCounts = {
+                positive: d3.sum(data, d => parseInt(d.positiveFeedback) || 0),
+                negative: d3.sum(data, d => parseInt(d.negativeFeedback) || 0),
+                neutral: d3.sum(data, d => parseInt(d.neutralFeedback) || 0)
+            };
+
+            const pieData = Object.entries(feedbackCounts)
+                                .map(([label, value]) => ({ label, value }))
+                                .filter(d => d.value > 0); // Only include segments with values > 0
+
+            if (pieData.length === 0) {
+                noDataMessage.classList.remove('hidden');
+                return;
+            } else {
+                noDataMessage.classList.add('hidden');
+            }
+
+            const width = chartSvg.node().getBoundingClientRect().width;
+            const height = chartSvg.node().getBoundingClientRect().height;
+            const radius = Math.min(width, height) / 2 - 10;
+
+            const svg = chartSvg
+                .append("g")
+                .attr("transform", `translate(${width / 2},${height / 2})`);
+
+            const color = d3.scaleOrdinal()
+                .domain(["positive", "negative", "neutral"])
+                .range(["#10B981", "#EF4444", "#6B7280"]); // Tailwind green-500, red-500, gray-500
+
+            const pie = d3.pie()
+                .value(d => d.value)
+                .sort(null);
+
+            const arc = d3.arc()
+                .innerRadius(0)
+                .outerRadius(radius);
+
+            const arcs = svg.selectAll("arc")
+                .data(pie(pieData))
+                .enter()
+                .append("g")
+                .attr("class", "arc");
+
+            arcs.append("path")
+                .attr("d", arc)
+                .attr("fill", d => color(d.data.label));
+
+            arcs.append("text")
+                .attr("transform", d => `translate(${arc.centroid(d)})`)
+                .attr("text-anchor", "middle")
+                .attr("fill", "white")
+                .style("font-size", "14px")
+                .text(d => `${d.data.label}: ${d.data.value}`);
+        }
+
+        // --- Analytics Section Charts and Tables ---
+
+        // Function to render the analytics dashboard
+        function renderAnalyticsDashboard() {
+            const allEntries = loadData();
+            const analyticsTableBody = document.getElementById('analyticsAllEntriesTableBody');
+            const noAnalyticsDataMessage = document.getElementById('noAnalyticsDataMessage');
+            const fiveStarEntryList = document.getElementById('fiveStarEntryList');
+
+            analyticsTableBody.innerHTML = ''; // Clear existing rows
+            fiveStarEntryList.innerHTML = ''; // Clear existing list items
+
+            if (allEntries.length === 0) {
+                noAnalyticsDataMessage.classList.remove('hidden');
+                fiveStarEntryList.innerHTML = '<li class="text-gray-500">No 5-star entries yet.</li>';
+                document.getElementById('pieChartPlaceholder').classList.remove('hidden');
+                document.getElementById('feedbackPieChart').classList.add('hidden');
+                document.getElementById('pieChartTitle').textContent = 'Select an entry to view feedback analytics';
+                return;
+            } else {
+                noAnalyticsDataMessage.classList.add('hidden');
+            }
+
+            // Populate All Entries table in Analytics
+            allEntries.forEach(entry => {
+                const row = analyticsTableBody.insertRow();
+                row.classList.add('hover:bg-gray-50', 'cursor-pointer');
+                row.onclick = () => renderFeedbackPieChart(entry); // Click to render pie chart
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${entry.uniqueId || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${entry.postedTime ? new Date(entry.postedTime).toLocaleString() : 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${entry.activistName || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${entry.platform || 'N/A'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title="${entry.context || ''}">${entry.context || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${entry.priority || 'N/A'}</td>
+                `;
+            });
+
+            // Populate Most Recent 5-Star Entries
+            const fiveStarEntries = allEntries.filter(entry => parseInt(entry.priority) === 5)
+                                            .sort((a, b) => new Date(b.postedTime) - new Date(a.postedTime))
+                                            .slice(0, 5); // Get top 5 most recent
+
+            if (fiveStarEntries.length > 0) {
+                fiveStarEntryList.innerHTML = ''; // Clear placeholder
+                fiveStarEntries.forEach(entry => {
+                    const li = document.createElement('li');
+                    li.className = 'bg-gray-50 p-2 rounded-md text-gray-700';
+                    li.textContent = `${entry.uniqueId} - ${entry.context ? entry.context.substring(0, 50) + '...' : 'N/A'} (${new Date(entry.postedTime).toLocaleDateString()})`;
+                    fiveStarEntryList.appendChild(li);
+                });
+            } else {
+                fiveStarEntryList.innerHTML = '<li class="text-gray-500">No 5-star entries yet.</li>';
+            }
+        }
+
+        // Render Pie Chart for individual entry feedback
+        function renderFeedbackPieChart(entry) {
+            const chartSvg = d3.select("#feedbackPieChart");
+            chartSvg.selectAll("*").remove(); // Clear previous chart
+            document.getElementById('pieChartPlaceholder').classList.add('hidden');
+            chartSvg.classList.remove('hidden');
+            document.getElementById('pieChartTitle').textContent = `Feedback for Entry: ${entry.uniqueId}`;
+
+            const feedbackCounts = {
+                positive: parseInt(entry.positiveFeedback) || 0,
+                negative: parseInt(entry.negativeFeedback) || 0,
+                neutral: parseInt(entry.neutralFeedback) || 0
+            };
+
+            const pieData = Object.entries(feedbackCounts)
+                                .map(([label, value]) => ({ label, value }))
+                                .filter(d => d.value > 0); // Only include segments with values > 0
+
+            if (pieData.length === 0) {
+                document.getElementById('pieChartPlaceholder').classList.remove('hidden');
+                chartSvg.classList.add('hidden');
+                document.getElementById('pieChartTitle').textContent = `No feedback data for Entry: ${entry.uniqueId}`;
+                return;
+            }
+
+            const width = chartSvg.node().getBoundingClientRect().width;
+            const height = chartSvg.node().getBoundingClientRect().height;
+            const radius = Math.min(width, height) / 2 - 10;
+
+            const svg = chartSvg
+                .append("g")
+                .attr("transform", `translate(${width / 2},${height / 2})`);
+
+            const color = d3.scaleOrdinal()
+                .domain(["positive", "negative", "neutral"])
+                .range(["#10B981", "#EF4444", "#6B7280"]); // Tailwind green-500, red-500, gray-500
+
+            const pie = d3.pie()
+                .value(d => d.value)
+                .sort(null);
+
+            const arc = d3.arc()
+                .innerRadius(0)
+                .outerRadius(radius);
+
+            const arcs = svg.selectAll("arc")
+                .data(pie(pieData))
+                .enter()
+                .append("g")
+                .attr("class", "arc");
+
+            arcs.append("path")
+                .attr("d", arc)
+                .attr("fill", d => color(d.data.label));
+
+            arcs.append("text")
+                .attr("transform", d => `translate(${arc.centroid(d)})`)
+                .attr("text-anchor", "middle")
+                .attr("fill", "white")
+                .style("font-size", "14px")
+                .text(d => `${d.data.label}: ${d.data.value}`);
+        }
+
+        // --- Admin Section Rendering ---
+        function renderAdminDashboard() {
+            populateActivistNames();
+            populateContextSnippets();
+        }
+
+        // --- Custom Modal for Confirmation and Info Messages ---
+        let customModalInstance = null; // To keep track of the current modal
+
+        function showCustomModal(message, type = 'info', onConfirm = null) {
+            // Remove existing modal if any
+            if (customModalInstance) {
+                customModalInstance.remove();
+            }
+
+            const modalOverlay = document.createElement('div');
+            modalOverlay.className = 'modal-overlay';
+            modalOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.6)'; // Darker overlay
+
+            const modalContent = document.createElement('div');
+            modalContent.className = 'modal-content bg-white p-6 rounded-lg shadow-xl text-center';
+            modalContent.style.maxWidth = '400px'; // Smaller modal for alerts/confirms
+
+            const messageParagraph = document.createElement('p');
+            messageParagraph.className = 'text-gray-800 text-lg mb-6';
+            messageParagraph.textContent = message;
+            modalContent.appendChild(messageParagraph);
+
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'flex justify-center space-x-4';
+
+            if (type === 'confirm') {
+                const confirmButton = document.createElement('button');
+                confirmButton.className = 'px-5 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition duration-200';
+                confirmButton.textContent = 'Confirm';
+                confirmButton.onclick = () => {
+                    if (onConfirm) onConfirm();
+                    modalOverlay.remove();
+                    customModalInstance = null;
+                };
+                buttonContainer.appendChild(confirmButton);
+
+                const cancelButton = document.createElement('button');
+                cancelButton.className = 'px-5 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition duration-200';
+                cancelButton.textContent = 'Cancel';
+                cancelButton.onclick = () => {
+                    modalOverlay.remove();
+                    customModalInstance = null;
+                };
+                buttonContainer.appendChild(cancelButton);
+            } else { // type === 'info'
+                const okButton = document.createElement('button');
+                okButton.className = 'px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-200';
+                okButton.textContent = 'OK';
+                okButton.onclick = () => {
+                    modalOverlay.remove();
+                    customModalInstance = null;
+                };
+                buttonContainer.appendChild(okButton);
+            }
+
+            modalContent.appendChild(buttonContainer);
+            modalOverlay.appendChild(modalContent);
+            document.body.appendChild(modalOverlay);
+            customModalInstance = modalOverlay; // Store reference to the modal
+        }
+
+        function showConfirmationModal(message, onConfirm) {
+            showCustomModal(message, 'confirm', onConfirm);
+        }
+
+        function showInfoModal(message) {
+            showCustomModal(message, 'info');
+        }
+
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            showSection('homeSection'); // Show home section by default
+            renderDashboard(); // Render dashboard on initial load
+            populateDataEntryFields(); // Populate dropdowns and snippets on initial load
+        });
+    </script>
+</body>
+</html>
